@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BugMind - AI-Powered Bug Triage</title>
+    <link rel="icon" href="data:," />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              canvas: "#ffffff",
+              panel: "#ffffff",
+              panel2: "#f6f8fa",
+              border: "#d0d7de",
+              text: "#24292f",
+              muted: "#57606a",
+              blue: "#0969da",
+              green: "#1a7f37",
+              yellow: "#9a6700",
+              red: "#cf222e",
+            },
+            boxShadow: {
+              soft: "0 12px 24px rgba(31, 35, 40, 0.08)",
+            },
+            fontFamily: {
+              sans: [
+                "-apple-system",
+                "BlinkMacSystemFont",
+                "Segoe UI",
+                "Helvetica Neue",
+                "Arial",
+                "sans-serif",
+              ],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        background:
+          radial-gradient(
+            circle at top,
+            rgba(9, 105, 218, 0.06),
+            transparent 30%
+          ),
+          linear-gradient(180deg, #ffffff 0%, #f6f8fa 100%);
+      }
+
+      ::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #d0d7de;
+        border-radius: 999px;
+        border: 3px solid #ffffff;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #ffffff;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen font-sans text-text antialiased">
+    <div
+      class="mx-auto flex min-h-screen max-w-[1600px] flex-col px-3 py-3 sm:px-4 sm:py-4 lg:px-6"
+    >
+      <header
+        class="sticky top-3 z-40 rounded-2xl border border-border bg-panel/95 shadow-soft backdrop-blur"
+      >
+        <div
+          class="flex flex-col gap-3 border-b border-border px-4 py-3 lg:flex-row lg:items-center lg:justify-between"
+        >
+          <div class="flex items-center gap-3">
+            <div
+              class="grid h-10 w-10 place-items-center rounded-xl border border-border bg-panel2 text-sm font-semibold shadow-sm"
+            >
+              B
+            </div>
+            <h1 class="text-base font-semibold text-text">BugMind dashboard</h1>
+          </div>
+
+          <label
+            class="flex flex-1 items-center gap-3 rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-muted lg:max-w-2xl"
+          >
+            <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4">
+              <path
+                d="M10.5 11h-.79l-.28-.27A6.5 6.5 0 1 0 9 11l.27.28v.79l5 4.99L15.49 16l-4.99-5zM6.5 11A4.5 4.5 0 1 1 6.5 2a4.5 4.5 0 0 1 0 9z"
+              />
+            </svg>
+            <input
+              id="global-search"
+              class="w-full bg-transparent text-sm text-text outline-none placeholder:text-muted"
+              type="search"
+              placeholder="Search repositories, issues, labels..."
+            />
+            <kbd
+              class="rounded-md border border-border bg-panel2 px-2 py-0.5 text-[11px] text-muted"
+              >/</kbd
+            >
+          </label>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              id="refresh-button"
+              class="rounded-xl border border-border bg-panel2 px-3 py-2 text-sm text-text transition hover:bg-white"
+              type="button"
+            >
+              Refresh issues
+            </button>
+            <button
+              id="demo-button"
+              class="rounded-xl border border-border bg-blue px-3 py-2 text-sm font-medium text-white transition hover:brightness-110"
+              type="button"
+            >
+              Load demo
+            </button>
+          </div>
+        </div>
+
+        <nav class="flex flex-wrap items-center gap-1 px-3 py-2 text-sm">
+          <button
+            data-view="repository"
+            class="view-switch rounded-lg px-3 py-2 text-text transition hover:bg-panel2"
+          >
+            Repository search
+          </button>
+          <button
+            data-view="issues"
+            class="view-switch rounded-lg px-3 py-2 text-text transition hover:bg-panel2"
+          >
+            Issues list
+          </button>
+          <button
+            data-view="details"
+            class="view-switch rounded-lg px-3 py-2 text-text transition hover:bg-panel2"
+          >
+            Issue details
+          </button>
+        </nav>
+      </header>
+
+      <main class="mt-4 grid flex-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <aside class="hidden h-fit flex-col gap-4 xl:flex">
+          <section
+            class="rounded-2xl border border-border bg-panel p-4 shadow-soft"
+          >
+            <div class="text-[11px] uppercase tracking-[0.16em] text-muted">
+              Connected repository
+            </div>
+            <div id="sidebar-repo-name" class="mt-2 text-lg font-semibold">
+              Loading...
+            </div>
+            <p
+              id="sidebar-repo-description"
+              class="mt-2 text-sm leading-6 text-muted"
+            ></p>
+            <div
+              id="sidebar-repo-meta"
+              class="mt-4 flex flex-wrap gap-2 text-xs text-muted"
+            ></div>
+
+            <div class="mt-5 border-t border-border pt-4">
+              <h3 class="text-sm font-semibold text-text">Connection status</h3>
+              <div
+                id="connection-status"
+                class="mt-3 rounded-xl border border-border bg-panel p-4 text-sm text-muted"
+              >
+                Loading repository state...
+              </div>
+            </div>
+          </section>
+        </aside>
+
+        <section class="grid gap-4">
+          <section
+            id="view-repository"
+            class="view-panel hidden rounded-2xl border border-border bg-panel p-4 shadow-soft lg:p-6"
+          >
+            <div
+              class="flex flex-col gap-4 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between"
+            >
+              <div>
+                <p
+                  class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
+                >
+                  Repository search
+                </p>
+                <h2
+                  class="mt-2 text-2xl font-semibold tracking-tight text-text"
+                >
+                  Connect a GitHub repository
+                </h2>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">
+                  Search GitHub repositories or connect an owner/name pair to
+                  ingest open issues into the dashboard.
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  class="rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-text transition hover:bg-panel2"
+                  type="button"
+                >
+                  Recent
+                </button>
+                <button
+                  class="rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-text transition hover:bg-panel2"
+                  type="button"
+                >
+                  Starred
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div class="grid gap-4">
+                <section class="rounded-2xl border border-border bg-canvas p-4">
+                  <h3 class="text-sm font-semibold text-text">
+                    Connect repository
+                  </h3>
+                  <form id="connect-form" class="mt-4 grid gap-3">
+                    <label class="grid gap-2">
+                      <span class="text-sm font-medium text-text"
+                        >Repository full name</span
+                      >
+                      <input
+                        id="repo-full-name"
+                        class="rounded-xl border border-border bg-panel px-3 py-2 text-sm text-text outline-none transition placeholder:text-muted focus:border-blue"
+                        type="text"
+                        placeholder="owner/repository"
+                        value="zohreh-mousavinasab/Web-Scraper"
+                      />
+                    </label>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        class="rounded-xl border border-border bg-blue px-3 py-2 text-sm font-medium text-white transition hover:brightness-110"
+                        type="submit"
+                      >
+                        Connect repository
+                      </button>
+                      <button
+                        id="ingest-button"
+                        class="rounded-xl border border-border bg-panel2 px-3 py-2 text-sm text-text transition hover:bg-white"
+                        type="button"
+                      >
+                        Re-ingest issues
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
+                <section class="rounded-2xl border border-border bg-canvas p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 class="text-sm font-semibold text-text">
+                        Repository search
+                      </h3>
+                      <p class="mt-1 text-sm text-muted">
+                        Search GitHub or the local demo catalog.
+                      </p>
+                    </div>
+                    <span
+                      id="search-source"
+                      class="rounded-full border border-border bg-panel2 px-3 py-1 text-xs text-muted"
+                      >demo</span
+                    >
+                  </div>
+
+                  <div
+                    class="mt-4 flex items-center gap-3 rounded-xl border border-border bg-panel px-3 py-2 transition focus-within:border-blue"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      class="h-4 w-4 text-muted"
+                    >
+                      <path
+                        d="M10.5 11h-.79l-.28-.27A6.5 6.5 0 1 0 9 11l.27.28v.79l5 4.99L15.49 16l-4.99-5zM6.5 11A4.5 4.5 0 1 1 6.5 2a4.5 4.5 0 0 1 0 9z"
+                      />
+                    </svg>
+                    <input
+                      id="repo-search"
+                      class="w-full bg-transparent text-sm text-text outline-none placeholder:text-muted"
+                      type="search"
+                      placeholder="Search repositories by owner, name, or language"
+                    />
+                  </div>
+
+                  <div id="repo-results" class="mt-4 grid gap-3"></div>
+                </section>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="view-issues"
+            class="view-panel hidden rounded-2xl border border-border bg-panel p-4 shadow-soft lg:p-6"
+          >
+            <div
+              class="flex flex-col gap-4 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between"
+            >
+              <div>
+                <p
+                  class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
+                >
+                  Issues list
+                </p>
+                <h2
+                  class="mt-2 text-2xl font-semibold tracking-tight text-text"
+                >
+                  Open GitHub issues
+                </h2>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">
+                  A clean, GitHub-like issue list showing the open backlog for
+                  the connected repository.
+                </p>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <button
+                  class="rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-text transition hover:bg-panel2"
+                  type="button"
+                >
+                  Filter
+                </button>
+                <button
+                  class="rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-text transition hover:bg-panel2"
+                  type="button"
+                >
+                  Sort
+                </button>
+                <button
+                  class="rounded-xl border border-border bg-blue px-3 py-2 text-sm font-medium text-white transition hover:brightness-110"
+                  type="button"
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-4">
+              <section class="grid gap-3 sm:grid-cols-3">
+                <article class="rounded-2xl border border-border bg-canvas p-4">
+                  <div class="text-xs uppercase tracking-[0.14em] text-muted">
+                    Open issues
+                  </div>
+                  <div
+                    id="stat-open-issues"
+                    class="mt-2 text-3xl font-semibold text-text"
+                  >
+                    0
+                  </div>
+                  <div class="mt-1 text-sm text-muted">Currently ingested</div>
+                </article>
+                <article class="rounded-2xl border border-border bg-canvas p-4">
+                  <div class="text-xs uppercase tracking-[0.14em] text-muted">
+                    Labels
+                  </div>
+                  <div
+                    id="stat-labels"
+                    class="mt-2 text-3xl font-semibold text-text"
+                  >
+                    0
+                  </div>
+                  <div class="mt-1 text-sm text-muted">
+                    Unique labels in view
+                  </div>
+                </article>
+                <article class="rounded-2xl border border-border bg-canvas p-4">
+                  <div class="text-xs uppercase tracking-[0.14em] text-muted">
+                    Comments
+                  </div>
+                  <div
+                    id="stat-comments"
+                    class="mt-2 text-3xl font-semibold text-text"
+                  >
+                    0
+                  </div>
+                  <div class="mt-1 text-sm text-muted">Across open issues</div>
+                </article>
+              </section>
+
+              <div id="issue-list" class="grid gap-3"></div>
+            </div>
+
+            <section
+              class="mt-4 grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
+            >
+              <article
+                class="w-full rounded-2xl border border-border bg-canvas p-4"
+              >
+                <div
+                  class="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div>
+                    <h3 class="mt-2 text-xl font-semibold text-text">
+                      Codex agent triage
+                    </h3>
+                    <p class="mt-2 text-sm leading-6 text-muted">
+                      Run the agent harness to classify issues, assign severity,
+                      and capture live reasoning events.
+                    </p>
+                  </div>
+                  <button
+                    id="run-agent"
+                    class="rounded-xl border border-border bg-blue px-3 py-2 text-sm font-medium text-white transition hover:brightness-110"
+                    type="button"
+                  >
+                    Run Agent
+                  </button>
+                </div>
+
+                <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div class="rounded-xl border border-border bg-panel p-3">
+                    <div class="text-xs uppercase tracking-[0.14em] text-muted">
+                      Runs
+                    </div>
+                    <div
+                      id="triage-run-count"
+                      class="mt-2 text-3xl font-semibold text-text"
+                    >
+                      0
+                    </div>
+                  </div>
+                  <div class="rounded-xl border border-border bg-panel p-3">
+                    <div class="text-xs uppercase tracking-[0.14em] text-muted">
+                      Processed
+                    </div>
+                    <div
+                      id="triage-processed-count"
+                      class="mt-2 text-3xl font-semibold text-text"
+                    >
+                      0
+                    </div>
+                  </div>
+                  <div class="rounded-xl border border-border bg-panel p-3">
+                    <div class="text-xs uppercase tracking-[0.14em] text-muted">
+                      Status
+                    </div>
+                    <div
+                      id="triage-status"
+                      class="mt-2 text-sm font-semibold text-text"
+                    >
+                      Idle
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-4 rounded-2xl border border-border bg-panel p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <h4 class="text-sm font-semibold text-text">
+                      Triage results
+                    </h4>
+                    <span
+                      id="triage-source"
+                      class="rounded-full border border-border bg-panel2 px-3 py-1 text-xs text-muted"
+                      >heuristic</span
+                    >
+                  </div>
+                  <div id="triage-results" class="mt-4 grid gap-3"></div>
+                </div>
+              </article>
+
+              <aside
+                class="w-full rounded-2xl border border-border bg-canvas p-4"
+              >
+                <div class="flex items-center justify-between">
+                  <h4 class="text-sm font-semibold text-text">Live feed</h4>
+                  <span
+                    id="triage-live-state"
+                    class="rounded-full border border-border bg-panel2 px-3 py-1 text-xs text-muted"
+                    >Disconnected</span
+                  >
+                </div>
+                <div id="triage-live-feed" class="mt-4 space-y-3"></div>
+              </aside>
+            </section>
+          </section>
+
+          <section
+            id="view-details"
+            class="view-panel hidden rounded-2xl border border-border bg-panel p-4 shadow-soft lg:p-6"
+          >
+            <div
+              class="flex items-center justify-between border-b border-border pb-4"
+            >
+              <div>
+                <p
+                  class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
+                >
+                  Issue details
+                </p>
+                <h2
+                  class="mt-2 text-2xl font-semibold tracking-tight text-text"
+                >
+                  Selected issue
+                </h2>
+              </div>
+              <button
+                id="open-detail"
+                class="rounded-xl border border-border bg-blue px-3 py-2 text-sm font-medium text-white transition hover:brightness-110"
+                type="button"
+              >
+                Open modal
+              </button>
+            </div>
+
+            <div
+              class="mt-4 grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
+            >
+              <article
+                class="w-full rounded-2xl border border-border bg-canvas p-4"
+              >
+                <div
+                  class="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div>
+                    <div
+                      id="detail-number"
+                      class="text-xs uppercase tracking-[0.14em] text-muted"
+                    ></div>
+                    <h3
+                      id="detail-title"
+                      class="mt-2 text-xl font-semibold text-text"
+                    ></h3>
+                    <div
+                      id="detail-meta"
+                      class="mt-2 flex flex-wrap gap-2 text-xs text-muted"
+                    ></div>
+                  </div>
+                  <span
+                    id="detail-state"
+                    class="inline-flex h-fit rounded-full border border-border bg-panel2 px-3 py-1 text-xs text-muted"
+                  ></span>
+                </div>
+
+                <div id="detail-labels" class="mt-4 flex flex-wrap gap-2"></div>
+
+                <dl class="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div class="rounded-xl border border-border bg-panel p-3">
+                    <dt class="text-xs uppercase tracking-[0.14em] text-muted">
+                      Comments
+                    </dt>
+                    <dd
+                      id="detail-comments"
+                      class="mt-2 text-base font-semibold text-text"
+                    ></dd>
+                  </div>
+                  <div class="rounded-xl border border-border bg-panel p-3">
+                    <dt class="text-xs uppercase tracking-[0.14em] text-muted">
+                      Updated
+                    </dt>
+                    <dd
+                      id="detail-updated"
+                      class="mt-2 text-base font-semibold text-text"
+                    ></dd>
+                  </div>
+                  <div class="rounded-xl border border-border bg-panel p-3">
+                    <dt class="text-xs uppercase tracking-[0.14em] text-muted">
+                      Author
+                    </dt>
+                    <dd
+                      id="detail-author"
+                      class="mt-2 text-base font-semibold text-text"
+                    ></dd>
+                  </div>
+                </dl>
+
+                <section
+                  class="mt-4 w-full rounded-2xl border border-border bg-panel p-4"
+                >
+                  <h4 class="text-sm font-semibold text-text">Issue body</h4>
+                  <p
+                    id="detail-body"
+                    class="mt-2 text-sm leading-6 text-muted"
+                  ></p>
+                </section>
+
+                <section
+                  class="mt-4 w-full rounded-2xl border border-border bg-panel p-4"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <h4 class="text-sm font-semibold text-text">
+                      Recommended solution
+                    </h4>
+                    <span
+                      id="recommendation-status-detail"
+                      class="rounded-full border border-border bg-panel2 px-3 py-1 text-xs text-muted"
+                      >Waiting</span
+                    >
+                  </div>
+                  <div
+                    id="recommendation-detail"
+                    class="mt-4 space-y-3 text-sm leading-6 text-muted"
+                  >
+                    Click an issue to ask Codex for a recommended fix.
+                  </div>
+                </section>
+
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <a
+                    id="detail-url"
+                    href="#"
+                    target="_blank"
+                    rel="noreferrer"
+                    class="rounded-xl border border-border bg-panel2 px-3 py-2 text-sm text-text transition hover:bg-white"
+                    >Open on GitHub</a
+                  >
+                  <button
+                    id="detail-refresh"
+                    class="rounded-xl border border-border bg-panel2 px-3 py-2 text-sm text-text transition hover:bg-white"
+                    type="button"
+                  >
+                    Refresh issues
+                  </button>
+                </div>
+              </article>
+
+              <aside
+                class="w-full rounded-2xl border border-border bg-canvas p-4"
+              >
+                <h3 class="text-sm font-semibold text-text">System notes</h3>
+                <div class="mt-4 space-y-3 text-sm leading-6 text-muted">
+                  <p>
+                    Codex triage, live monitoring, and issue recommendations are
+                    available in this workspace.
+                  </p>
+                </div>
+
+                <section
+                  class="mt-4 w-full rounded-2xl border border-border bg-panel p-4"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <h4 class="text-sm font-semibold text-text">
+                        Audit trail
+                      </h4>
+                      <p class="mt-1 text-xs text-muted">
+                        Backed by <span class="font-mono">audit_log.txt</span>
+                      </p>
+                    </div>
+                    <button
+                      id="audit-refresh"
+                      class="rounded-lg border border-border bg-panel2 px-3 py-1.5 text-xs text-text transition hover:bg-white"
+                      type="button"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                  <div
+                    class="mt-3 flex items-center justify-between text-xs text-muted"
+                  >
+                    <span id="audit-log-path" class="font-mono"
+                      >audit_log.txt</span
+                    >
+                    <span id="audit-log-count">0 entries</span>
+                  </div>
+                  <div id="audit-log-feed" class="mt-3 space-y-2"></div>
+                </section>
+              </aside>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div
+      id="detail-modal"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+    >
+      <div
+        class="w-full max-w-4xl rounded-3xl border border-border bg-panel shadow-soft overflow-hidden max-h-[90vh] flex flex-col"
+      >
+        <div
+          class="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6"
+        >
+          <div>
+            <p class="text-[11px] uppercase tracking-[0.18em] text-muted">
+              Issue detail modal
+            </p>
+            <h3 class="mt-1 text-lg font-semibold text-text">Selected issue</h3>
+          </div>
+          <button
+            id="close-detail"
+            class="rounded-lg border border-border bg-canvas px-3 py-2 text-sm text-text transition hover:bg-panel2"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+        <div
+          class="grid items-stretch gap-6 p-6 sm:p-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] overflow-auto flex-1"
+        >
+          <section
+            class="w-full rounded-2xl border border-border bg-canvas p-4"
+          >
+            <div
+              class="flex items-start justify-between gap-3 border-b border-border pb-4"
+            >
+              <div>
+                <div
+                  id="modal-number"
+                  class="text-xs uppercase tracking-[0.14em] text-muted"
+                ></div>
+                <h4
+                  id="modal-title"
+                  class="mt-2 text-xl font-semibold text-text"
+                ></h4>
+                <div
+                  id="modal-meta"
+                  class="mt-2 flex flex-wrap gap-2 text-xs text-muted"
+                ></div>
+              </div>
+              <span
+                id="modal-state"
+                class="inline-flex rounded-full border border-border bg-panel2 px-3 py-1 text-xs text-muted"
+              ></span>
+            </div>
+            <div id="modal-labels" class="mt-4 flex flex-wrap gap-2"></div>
+            <div class="mt-4 grid gap-3 sm:grid-cols-3">
+              <div class="rounded-xl border border-border bg-panel p-3">
+                <div class="text-xs uppercase tracking-[0.14em] text-muted">
+                  Comments
+                </div>
+                <div
+                  id="modal-comments"
+                  class="mt-2 font-semibold text-text"
+                ></div>
+              </div>
+              <div class="rounded-xl border border-border bg-panel p-3">
+                <div class="text-xs uppercase tracking-[0.14em] text-muted">
+                  Updated
+                </div>
+                <div
+                  id="modal-updated"
+                  class="mt-2 font-semibold text-text"
+                ></div>
+              </div>
+              <div class="rounded-xl border border-border bg-panel p-3">
+                <div class="text-xs uppercase tracking-[0.14em] text-muted">
+                  Author
+                </div>
+                <div
+                  id="modal-author"
+                  class="mt-2 font-semibold text-text"
+                ></div>
+              </div>
+            </div>
+          </section>
+          <aside class="w-full rounded-2xl border border-border bg-canvas p-4">
+            <h4 class="text-sm font-semibold text-text">Issue body</h4>
+            <p id="modal-body" class="mt-3 text-sm leading-6 text-muted"></p>
+            <section
+              class="mt-4 w-full rounded-2xl border border-border bg-panel p-4"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <h4 class="text-sm font-semibold text-text">
+                  Recommended solution
+                </h4>
+                <span
+                  id="recommendation-status-modal"
+                  class="rounded-full border border-border bg-panel2 px-3 py-1 text-xs text-muted"
+                  >Waiting</span
+                >
+              </div>
+              <div
+                id="recommendation-modal"
+                class="mt-4 space-y-3 text-sm leading-6 text-muted"
+              >
+                Click an issue to ask Codex for a recommended fix.
+              </div>
+            </section>
+            <a
+              id="modal-url"
+              href="#"
+              target="_blank"
+              rel="noreferrer"
+              class="mt-4 inline-flex rounded-xl border border-border bg-panel2 px-3 py-2 text-sm text-text transition hover:bg-white"
+              >Open on GitHub</a
+            >
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <script src="/main.js"></script>
+  </body>
+</html>

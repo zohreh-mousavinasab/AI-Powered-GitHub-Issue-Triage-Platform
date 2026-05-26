@@ -1,0 +1,8 @@
+/* Minimal fallback styles. Most of the UI is driven by Tailwind utilities in index.html. */
+::selection {
+  background: rgba(47, 129, 247, 0.35);
+}
+
+body {
+  margin: 0;
+}
